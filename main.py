@@ -112,73 +112,106 @@ async def describe_table(table: str):
 @mcp.tool()
 async def run_query(query: str):
     """
-    Run a SAFE SQL query (SELECT-only)
-    Mutating statements are blocked.
+    Run all types of queries no restrictions on any operation
     """
-
-    q = query.strip().lower()
-
-    forbidden = ["drop", "delete", "update", "insert", "alter", "truncate"]
-
-    if any(x in q for x in forbidden):
-        return {
-            "status": "error",
-            "message": "Only SELECT queries are allowed for safety"
-        }
-
-    if not q.startswith("select"):
-        return {
-            "status": "error",
-            "message": "Query must start with SELECT"
-        }
 
     try:
         async with aiosqlite.connect(DB_PATH) as c:
             cur = await c.execute(query)
-
-            cols = [d[0] for d in cur.description]
-            rows = await cur.fetchall()
-
-            return {
-                "status": "success",
-                "row_count": len(rows),
-                "rows": [dict(zip(cols, r)) for r in rows]
-            }
-
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
-@mcp.tool()
-async def insert_sample_data():
-    """Insert demo rows for testing queries"""
-
-    try:
-        async with aiosqlite.connect(DB_PATH) as c:
-            await c.executemany(
-                "INSERT INTO cars(make, model, price) VALUES (?,?,?)",
-                [
-                    ("Toyota", "Corolla", 15000),
-                    ("Honda", "Civic", 18000),
-                    ("Tesla", "Model 3", 42000)
-                ]
-            )
-
-            await c.executemany(
-                "INSERT INTO users(name, country) VALUES (?,?)",
-                [
-                    ("Maulik", "India"),
-                    ("John", "USA"),
-                    ("Akira", "Japan")
-                ]
-            )
-
-            await c.commit()
-
-            return {"status": "success", "message": "Sample data inserted"}
+            
+            # Check if this is a query that returns rows (SELECT)
+            if cur.description is not None:
+                # Query returns rows (SELECT)
+                cols = [d[0] for d in cur.description]
+                rows = await cur.fetchall()
+                
+                return {
+                    "status": "success",
+                    "row_count": len(rows),
+                    "rows": [dict(zip(cols, r)) for r in rows]
+                }
+            else:
+                # Query doesn't return rows (INSERT, UPDATE, DELETE, etc.)
+                await c.commit()  # Important: commit the transaction
+                
+                return {
+                    "status": "success",
+                    "rows_affected": cur.rowcount,
+                    "message": f"Query executed successfully. {cur.rowcount} row(s) affected."
+                }
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# @mcp.tool()
+# async def run_query(query: str):
+#     """
+#     Run all types of queries no restrictions on any operation
+#     """
+
+#     q = query.strip().lower()
+
+#     # forbidden = ["drop", "delete", "update", "insert", "alter", "truncate"]
+
+#     # if any(x in q for x in forbidden):
+#     #     return {
+#     #         "status": "error",
+#     #         "message": "Only SELECT queries are allowed for safety"
+#     #     }
+
+#     # if not q.startswith("select"):
+#     #     return {
+#     #         "status": "error",
+#     #         "message": "Query must start with SELECT"
+#     #     }
+
+#     try:
+#         async with aiosqlite.connect(DB_PATH) as c:
+#             cur = await c.execute(query)
+
+#             cols = [d[0] for d in cur.description]
+#             rows = await cur.fetchall()
+
+#             return {
+#                 "status": "success",
+#                 "row_count": len(rows),
+#                 "rows": [dict(zip(cols, r)) for r in rows]
+#             }
+
+#     except Exception as e:
+#         return {"status": "error", "message": str(e)}
+
+
+# @mcp.tool()
+# async def insert_sample_data():
+#     """Insert demo rows for testing queries"""
+
+#     try:
+#         async with aiosqlite.connect(DB_PATH) as c:
+#             await c.executemany(
+#                 "INSERT INTO cars(make, model, price) VALUES (?,?,?)",
+#                 [
+#                     ("Toyota", "Corolla", 15000),
+#                     ("Honda", "Civic", 18000),
+#                     ("Tesla", "Model 3", 42000)
+#                 ]
+#             )
+
+#             await c.executemany(
+#                 "INSERT INTO users(name, country) VALUES (?,?)",
+#                 [
+#                     ("Maulik", "India"),
+#                     ("John", "USA"),
+#                     ("Akira", "Japan")
+#                 ]
+#             )
+
+#             await c.commit()
+
+#             return {"status": "success", "message": "Sample data inserted"}
+
+#     except Exception as e:
+#         return {"status": "error", "message": str(e)}
 
 
 # ---------- START SERVER ----------
